@@ -144,7 +144,6 @@ export default function NegotiatePage() {
         timestamp: new Date(),
         type: 'message'
       };
-      
       setMessages(prev => [...prev, fallbackMessage]);
     } finally {
       setLoading(false);
