@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "title": "Vintage Acoustic Guitar",
+    "description": "Beautiful vintage guitar in excellent condition with rich, warm tones. Perfect for folk, country, and acoustic performances.",
+    "value": 450,
+    "category": "Musical Instruments",
+    "condition": "excellent",
+    "images": ["https://images.pexels.com/photos/1049690/pexels-photo-1049690.jpeg?auto=compress&cs=tinysrgb&w=400"],
+    "owner": "Alex Johnson",
+    "location": "San Francisco, CA",
+    "createdAt": "2024-01-15T10:30:00Z"
+  },
+  {
+    "id": 2,
+    "title": "High-End DSLR Camera",
+    "description": "Professional camera with multiple lenses, perfect for photography enthusiasts and professionals.",
+    "value": 800,
+    "category": "Electronics",
+    "condition": "good",
+    "images": ["https://images.pexels.com/photos/90946/pexels-photo-90946.jpeg?auto=compress&cs=tinysrgb&w=400"],
+    "owner": "Sarah Chen",
+    "location": "New York, NY",
+    "createdAt": "2024-01-14T15:45:00Z"
+  },
+  {
+    "id": 3,
+    "title": "Artisan Coffee Maker",
+    "description": "Premium espresso machine for coffee lovers, includes grinder and accessories.",
+    "value": 320,
+    "category": "Kitchen",
+    "condition": "excellent",
+    "images": ["https://images.pexels.com/photos/4226796/pexels-photo-4226796.jpeg?auto=compress&cs=tinysrgb&w=400"],
+    "owner": "Mike Rodriguez",
+    "location": "Seattle, WA",
+    "createdAt": "2024-01-13T09:20:00Z"
+  },
+  {
+    "id": 4,
+    "title": "Mountain Bike",
+    "description": "Professional trail bike with premium components, perfect for outdoor adventures.",
+    "value": 600,
+    "category": "Sports",
+    "condition": "good",
+    "images": ["https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400"],
+    "owner": "Emma Thompson",
+    "location": "Denver, CO",
+    "createdAt": "2024-01-12T14:10:00Z"
+  },
+  {
+    "id": 5,
+    "title": "Designer Office Chair",
+    "description": "Ergonomic chair with premium materials, excellent for home office setup.",
+    "value": 400,
+    "category": "Home & Garden",
+    "condition": "excellent",
+    "images": ["https://images.pexels.com/photos/586024/pexels-photo-586024.jpeg?auto=compress&cs=tinysrgb&w=400"],
+    "owner": "David Kim",
+    "location": "Austin, TX",
+    "createdAt": "2024-01-11T11:30:00Z"
+  },
+  {
+    "id": 6,
+    "title": "Professional Art Set",
+    "description": "Complete set with paints, brushes, and canvas for professional artists.",
+    "value": 280,
+    "category": "Art & Crafts",
+    "condition": "good",
+    "images": ["https://images.pexels.com/photos/1109541/pexels-photo-1109541.jpeg?auto=compress&cs=tinysrgb&w=400"],
+    "owner": "Lisa Park",
+    "location": "Portland, OR",
+    "createdAt": "2024-01-10T16:45:00Z"
+  }
+]
