@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Upload, Eye, Check } from 'lucide-react';
+import { ArrowLeft, Upload, Eye, Check, Wand2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { analyzeImageAndExtractDetails } from '@/lib/aiLogic';
 
 const categories = [
   'Electronics',
@@ -35,6 +36,9 @@ export default function UploadPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [analyzingImage, setAnalyzingImage] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -46,6 +50,46 @@ export default function UploadPage() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleImageUpload = (event :any) => {
+    const file = event.target.files[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target && typeof e.target.result === 'string') {
+          setImagePreview(e.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAnalyzeImage = async () => {
+    if (!imageFile) return;
+    
+    setAnalyzingImage(true);
+    try {
+      const analyzedData = await analyzeImageAndExtractDetails(imageFile);
+      
+      // Update form data with analyzed information
+      setFormData(prev => ({
+        ...prev,
+        title: analyzedData.title,
+        description: analyzedData.description,
+        value: analyzedData.value.toString(),
+        category: analyzedData.category,
+        condition: analyzedData.condition,
+        images: [imageFile]
+      }));
+      
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      // You might want to show an error toast here
+    } finally {
+      setAnalyzingImage(false);
+    }
   };
 
   const handleNext = () => {
@@ -131,27 +175,86 @@ export default function UploadPage() {
           <CardContent className="space-y-6">
             {step === 1 && (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="title">Item Title *</Label>
-                  <Input
-                    id="title"
-                    placeholder="e.g., Vintage Acoustic Guitar"
-                    value={formData.title}
-                    onChange={(e) => handleInputChange('title', e.target.value)}
-                    className="w-full"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Describe your item in detail..."
-                    value={formData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    rows={4}
-                    className="w-full"
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Upload Image for AI Analysis</Label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-400 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <label htmlFor="image-upload" className="cursor-pointer">
+                        {imagePreview ? (
+                          <div className="space-y-4">
+                            <img 
+                              src={imagePreview} 
+                              alt="Preview" 
+                              className="max-w-full max-h-48 mx-auto rounded-lg"
+                            />
+                            <p className="text-sm text-gray-600">Click to change image</p>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-gray-500">Click to upload or drag and drop</p>
+                            <p className="text-sm text-gray-400">PNG, JPG up to 10MB</p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                    
+                    {imageFile && (
+                      <Button
+                        onClick={handleAnalyzeImage}
+                        disabled={analyzingImage}
+                        className="w-full bg-blue-600 hover:bg-blue-700 mt-4"
+                      >
+                        {analyzingImage ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing Image...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4 mr-2" />
+                            Analyze Image with AI
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-gray-600 mb-4">Or manually enter details:</p>
+                    
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Item Title *</Label>
+                        <Input
+                          id="title"
+                          placeholder="e.g., Vintage Acoustic Guitar"
+                          value={formData.title}
+                          onChange={(e) => handleInputChange('title', e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description *</Label>
+                        <Textarea
+                          id="description"
+                          placeholder="Describe your item in detail..."
+                          value={formData.description}
+                          onChange={(e) => handleInputChange('description', e.target.value)}
+                          rows={4}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -201,15 +304,39 @@ export default function UploadPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Images (Optional)</Label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-400 transition-colors">
-                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500">Click to upload or drag and drop</p>
-                    <p className="text-sm text-gray-400">PNG, JPG up to 10MB</p>
+                
+                {!imageFile && (
+                  <div className="space-y-2">
+                    <Label>Images (Optional)</Label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-400 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="additional-image-upload"
+                      />
+                      <label htmlFor="additional-image-upload" className="cursor-pointer">
+                        <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500">Click to upload or drag and drop</p>
+                        <p className="text-sm text-gray-400">PNG, JPG up to 10MB</p>
+                      </label>
+                    </div>
                   </div>
-                </div>
+                )}
+                
+                {imagePreview && (
+                  <div className="space-y-2">
+                    <Label>Current Image</Label>
+                    <div className="border rounded-lg p-4">
+                      <img 
+                        src={imagePreview} 
+                        alt="Item" 
+                        className="max-w-full max-h-32 mx-auto rounded"
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -243,6 +370,18 @@ export default function UploadPage() {
                         {conditions.find(c => c.value === formData.condition)?.label}
                       </span>
                     </div>
+                    {imagePreview && (
+                      <div>
+                        <span className="font-medium text-gray-700">Image:</span>
+                        <div className="mt-2">
+                          <img 
+                            src={imagePreview} 
+                            alt="Item preview" 
+                            className="max-w-full max-h-48 rounded-lg"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

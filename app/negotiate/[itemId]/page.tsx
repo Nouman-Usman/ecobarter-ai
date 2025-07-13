@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ArrowLeft, Send, Calculator, CheckCircle, XCircle, Clock, User } from 'lucide-react';
 import itemsData from '@/data/items.json';
+import {generateResponse} from '@/lib/aiLogic';
 
 interface Message {
   id: number;
@@ -80,23 +81,18 @@ export default function NegotiatePage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/negotiate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: messageToSend,
-          itemContext: item
-        })
-      });
+      // Set a timeout to ensure we don't wait too long for a response
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Response timeout')), 10000)
+      );
+      
+      // Race between the actual API call and the timeout
+      const aiResponse = await Promise.race([
+        generateResponse(messageToSend, item),
+        timeoutPromise
+      ]);
 
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
-      }
-
-      const data = await response.json();
-      const aiResponse = data.response;
+      console.log('AI Response:', aiResponse);
       
       const aiMessage: Message = {
         id: messages.length + 2,
@@ -111,15 +107,34 @@ export default function NegotiatePage() {
       console.error('Error generating AI response:', error);
       
       // Enhanced fallback response based on message content
+      // Use more specific contextual responses based on keywords
+      const lowerMessage = messageToSend.toLowerCase();
       let fallbackText = "I'm having trouble connecting right now, but I'm definitely interested in discussing this trade!";
       
-      const lowerMessage = messageToSend.toLowerCase();
-      if (lowerMessage.includes('trade') || lowerMessage.includes('swap')) {
-        fallbackText = `That sounds like a great trade opportunity! I'd love to learn more about what you're offering for my ${item?.title}.`;
-      } else if (lowerMessage.includes('value') || lowerMessage.includes('price')) {
-        fallbackText = `My ${item?.title} is valued at $${item?.value}. What's the estimated value of your item?`;
-      } else if (lowerMessage.includes('accept') || lowerMessage.includes('deal')) {
-        fallbackText = "Fantastic! I'm excited about this trade. Let's finalize the details!";
+      if (lowerMessage.includes('trade') || lowerMessage.includes('swap') || lowerMessage.includes('exchange')) {
+        fallbackText = `That sounds like a great trade opportunity! I'd love to learn more about what you're offering for my ${item?.title}. What items do you have available for trade?`;
+      } 
+      else if (lowerMessage.includes('value') || lowerMessage.includes('price') || lowerMessage.includes('worth') || lowerMessage.includes('cost')) {
+        fallbackText = `My ${item?.title} is valued at $${item?.value}. What's the estimated value of your item? I'm open to discussing trades with similar values or adding something to balance the difference.`;
+      } 
+      else if (lowerMessage.includes('condition') || lowerMessage.includes('quality') || lowerMessage.includes('state')) {
+        fallbackText = `The ${item?.title} is in ${item?.condition} condition. I can provide more detailed photos if you'd like to see specific aspects. What's the condition of your item?`;
+      }
+      else if (lowerMessage.includes('negotiate') || lowerMessage.includes('offer') || lowerMessage.includes('deal')) {
+        fallbackText = `I'm definitely open to negotiating! Let's work together to find a fair trade that benefits both of us. What are you thinking in terms of the trade structure?`;
+      }
+      else if (lowerMessage.includes('cash') || lowerMessage.includes('money') || lowerMessage.includes('add')) {
+        const suggestedAmount = Math.round(item?.value * 0.1) || 50;
+        fallbackText = `Adding some cash to balance the trade values is totally reasonable! Based on the values, maybe around $${suggestedAmount} could work? What do you think?`;
+      }
+      else if (lowerMessage.includes('accept') || lowerMessage.includes('agree') || lowerMessage.includes('yes')) {
+        fallbackText = `Fantastic! I'm excited about this trade. Let's finalize the details and arrange a safe meeting location for the exchange. This is going to be great for both of us!`;
+      }
+      else if (lowerMessage.includes('decline') || lowerMessage.includes('no') || lowerMessage.includes('not interested')) {
+        fallbackText = `No worries at all! Thanks for considering the trade. Feel free to reach out if you change your mind or if you have other items you'd like to discuss. Happy bartering!`;
+      }
+      else if (lowerMessage.includes('meet') || lowerMessage.includes('location') || lowerMessage.includes('when')) {
+        fallbackText = `I'm available to meet in a public place for safety. Would a local coffee shop work for you? I'm generally free on weekends or after 5pm on weekdays. What works best for your schedule?`;
       }
       
       const fallbackMessage: Message = {
@@ -131,23 +146,27 @@ export default function NegotiatePage() {
       };
       
       setMessages(prev => [...prev, fallbackMessage]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const makeProposal = (type: 'propose' | 'counter' | 'accept') => {
     let proposalText = '';
+    let messageType: Message['type'] = 'proposal';
     
     switch (type) {
       case 'propose':
         proposalText = `I'd like to propose a trade: my vintage laptop (worth $${item?.value}) for your ${item?.title}. What do you think?`;
+        messageType = 'proposal';
         break;
       case 'counter':
         proposalText = `I appreciate your offer, but could we adjust the terms? How about adding a small cash amount to balance the values?`;
+        messageType = 'counter';
         break;
       case 'accept':
         proposalText = "That sounds like a fair deal! I accept your proposal.";
+        messageType = 'proposal';
         break;
     }
 
@@ -156,15 +175,66 @@ export default function NegotiatePage() {
       text: proposalText,
       sender: 'user',
       timestamp: new Date(),
-      type: type
+      type: messageType
     };
 
     setMessages(prev => [...prev, proposalMessage]);
 
+    // Generate AI response to the proposal
+    setLoading(true);
+    setTimeout(async () => {
+      try {
+        // Prepare contextual response based on proposal type
+        let responseText = '';
+        if (type === 'propose') {
+          responseText = await generateResponse(`I've received a proposal to trade your ${item?.title}. What do you think?`, item);
+        } else if (type === 'counter') {
+          responseText = await generateResponse(`I've received a counter offer regarding ${item?.title}. Let's discuss the details.`, item);
+        } else if (type === 'accept') {
+          responseText = "Great! I'm glad we could reach an agreement. Let's arrange the exchange details.";
+        }
+        
+        const aiMessage: Message = {
+          id: messages.length + 2,
+          text: responseText,
+          sender: 'ai',
+          timestamp: new Date(),
+          type: type === 'accept' ? 'proposal' : (type === 'counter' ? 'counter' : 'message')
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+      } catch (error) {
+        console.error('Error generating response to proposal:', error);
+        
+        // Fallback responses based on proposal type
+        let fallbackText = "Thanks for your proposal! Let me think about it.";
+        
+        if (type === 'propose') {
+          fallbackText = `That's an interesting offer! Your ${item?.value} laptop for my ${item?.title}. Let me consider this. Do you have any photos of the laptop you could share?`;
+        } else if (type === 'counter') {
+          fallbackText = `I'm open to adjusting our trade terms. What amount were you thinking would make this fair?`;
+        } else if (type === 'accept') {
+          fallbackText = `Excellent! I'm looking forward to completing this trade. Should we meet at a public location? How about the coffee shop downtown this weekend?`;
+        }
+        
+        const fallbackMessage: Message = {
+          id: messages.length + 2,
+          text: fallbackText,
+          sender: 'ai',
+          timestamp: new Date(),
+          type: type === 'accept' ? 'proposal' : (type === 'counter' ? 'counter' : 'message')
+        };
+        
+        setMessages(prev => [...prev, fallbackMessage]);
+      } finally {
+        setLoading(false);
+      }
+    }, 1000);
+
     if (type === 'accept') {
       setTimeout(() => {
         router.push('/deal-done');
-      }, 2000);
+      }, 3000);
     }
   };
 
@@ -299,7 +369,7 @@ export default function NegotiatePage() {
 
           {/* Chat Interface - Full Height */}
           <div className="lg:col-span-2">
-            <Card className="h-[calc(100vh-200px)] flex flex-col">
+            <Card className=" flex flex-col"> {/* Increased height */}
               <CardHeader className="border-b bg-white rounded-t-lg">
                 <CardTitle className="flex items-center">
                   <Avatar className="w-8 h-8 mr-3">
@@ -331,19 +401,39 @@ export default function NegotiatePage() {
                         <div
                           className={`rounded-lg p-3 shadow-sm ${
                             message.sender === 'user'
-                              ? 'bg-green-600 text-white'
-                              : 'bg-white text-gray-900 border border-gray-200'
+                              ? message.type === 'proposal' 
+                                ? 'bg-blue-600 text-white' 
+                                : message.type === 'counter'
+                                  ? 'bg-amber-600 text-white'
+                                  : 'bg-green-600 text-white'
+                              : message.type === 'proposal'
+                                ? 'bg-blue-50 text-gray-900 border border-blue-200'
+                                : message.type === 'counter'
+                                  ? 'bg-amber-50 text-gray-900 border border-amber-200'
+                                  : 'bg-white text-gray-900 border border-gray-200'
                           }`}
                         >
                           {message.type === 'proposal' && (
                             <div className="flex items-center mb-2">
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                              <span className="text-sm font-semibold">Trade Proposal</span>
+                              <CheckCircle className={`w-4 h-4 mr-2 ${message.sender === 'user' ? 'text-white' : 'text-blue-600'}`} />
+                              <span className={`text-sm font-semibold ${message.sender === 'user' ? 'text-white' : 'text-blue-600'}`}>Trade Proposal</span>
+                            </div>
+                          )}
+                          {message.type === 'counter' && (
+                            <div className="flex items-center mb-2">
+                              <Clock className={`w-4 h-4 mr-2 ${message.sender === 'user' ? 'text-white' : 'text-amber-600'}`} />
+                              <span className={`text-sm font-semibold ${message.sender === 'user' ? 'text-white' : 'text-amber-600'}`}>Counter Offer</span>
                             </div>
                           )}
                           <p className="text-sm leading-relaxed">{message.text}</p>
                           <p className={`text-xs mt-2 ${
-                            message.sender === 'user' ? 'text-green-100' : 'text-gray-500'
+                            message.sender === 'user' 
+                              ? message.type === 'proposal' 
+                                ? 'text-blue-100' 
+                                : message.type === 'counter' 
+                                  ? 'text-amber-100' 
+                                  : 'text-green-100'
+                            : 'text-gray-500'
                           }`}>
                             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
@@ -390,6 +480,42 @@ export default function NegotiatePage() {
                       className="bg-green-600 hover:bg-green-700 px-4"
                     >
                       <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {/* Quick Response Buttons - These provide fallbacks if AI is unavailable */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setNewMessage(`What's the lowest value you'd accept for your ${item?.title}?`)}
+                      className="text-xs bg-gray-50 hover:bg-gray-100"
+                    >
+                      Ask price
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setNewMessage(`Would you consider a trade plus $${Math.round(item?.value * 0.1)} cash?`)}
+                      className="text-xs bg-gray-50 hover:bg-gray-100"
+                    >
+                      Offer cash
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setNewMessage("Can you tell me more about the condition?")}
+                      className="text-xs bg-gray-50 hover:bg-gray-100"
+                    >
+                      Ask condition
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setNewMessage("I'm interested! When and where can we meet?")}
+                      className="text-xs bg-gray-50 hover:bg-gray-100"
+                    >
+                      Arrange meeting
                     </Button>
                   </div>
                   
