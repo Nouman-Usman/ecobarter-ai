@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ArrowLeft, Send, Calculator, CheckCircle, XCircle, Clock, User } from 'lucide-react';
-import itemsData from '@/data/items.json';
-import {generateResponse} from '@/lib/aiLogic';
+import { generateResponse } from '@/lib/aiLogic';
+import { getItemById, Item } from '@/lib/supabase';
+import { useAuth } from '@/components/AuthProvider';
+import AuthModal from '@/components/AuthModal';
 
 interface Message {
   id: number;
@@ -23,24 +25,30 @@ interface Message {
 export default function NegotiatePage() {
   const params = useParams();
   const router = useRouter();
-  const [item, setItem] = useState<any>(null);
+  const { user } = useAuth();
+  const [item, setItem] = useState<Item | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [itemLoading, setItemLoading] = useState(true);
   const [showCalculator, setShowCalculator] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Find the item from the JSON data
-    const foundItem = itemsData.find(item => item.id.toString() === params.itemId);
-    if (foundItem) {
-      const transformedItem = {
-        ...foundItem,
-        image: foundItem.images[0],
-      };
-      setItem(transformedItem);
-    }
+    loadItem();
   }, [params.itemId]);
+
+  const loadItem = async () => {
+    setItemLoading(true);
+    const { data, error } = await getItemById(params.itemId as string);
+    
+    if (data && !error) {
+      setItem(data);
+    }
+    
+    setItemLoading(false);
+  };
 
   useEffect(() => {
     if (!item) return;
@@ -48,7 +56,7 @@ export default function NegotiatePage() {
     // Initialize conversation
     const initialMessage: Message = {
       id: 1,
-      text: `Hi! I'm interested in trading for your ${item?.title}. I have a few items that might interest you. What are you looking for in a trade?`,
+      text: `Hi! I'm interested in trading for your ${item.title}. I have a few items that might interest you. What are you looking for in a trade?`,
       sender: 'ai',
       timestamp: new Date(),
       type: 'message'
@@ -65,6 +73,11 @@ export default function NegotiatePage() {
   };
 
   const sendMessage = async () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (!newMessage.trim()) return;
 
     const userMessage: Message = {
@@ -151,6 +164,11 @@ export default function NegotiatePage() {
   };
 
   const makeProposal = (type: 'propose' | 'counter' | 'accept') => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
     let proposalText = '';
     let messageType: Message['type'] = 'proposal';
     
@@ -240,11 +258,15 @@ export default function NegotiatePage() {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (user) {
+        sendMessage();
+      } else {
+        setShowAuthModal(true);
+      }
     }
   };
 
-  if (!item) {
+  if (itemLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -260,8 +282,24 @@ export default function NegotiatePage() {
     );
   }
 
+  if (!item) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Item not found</h2>
+          <Link href="/matches">
+            <Button className="bg-green-600 hover:bg-green-700">
+              Back to Matches
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <div className="min-h-screen bg-gray-50">
       {/* Fixed Header */}
       <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -288,7 +326,7 @@ export default function NegotiatePage() {
               <CardContent className="space-y-4">
                 <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
                   <img 
-                    src={item.image} 
+                    src={item.images[0] || 'https://images.pexels.com/photos/1109541/pexels-photo-1109541.jpeg?auto=compress&cs=tinysrgb&w=400'} 
                     alt={item.title}
                     className="w-full h-full object-cover"
                   />
@@ -313,11 +351,11 @@ export default function NegotiatePage() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500">Owner:</span>
-                      <span className="font-medium">{item.owner}</span>
+                      <span className="font-medium">{item.profiles?.full_name || 'Unknown'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500">Location:</span>
-                      <span className="text-sm text-gray-600">{item.location}</span>
+                      <span className="text-sm text-gray-600">{item.profiles?.location || 'Not specified'}</span>
                     </div>
                   </div>
                 </div>
@@ -373,11 +411,11 @@ export default function NegotiatePage() {
                 <CardTitle className="flex items-center">
                   <Avatar className="w-8 h-8 mr-3">
                     <AvatarFallback className="bg-green-100 text-green-600">
-                      {item.owner.split(' ').map((n: string) => n[0]).join('')}
+                      {item.profiles?.full_name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <div className="font-semibold">Chat with {item.owner}</div>
+                    <div className="font-semibold">Chat with {item.profiles?.full_name || 'Owner'}</div>
                     <div className="text-sm text-gray-500 font-normal">Usually responds within minutes</div>
                   </div>
                 </CardTitle>
@@ -394,7 +432,7 @@ export default function NegotiatePage() {
                       <div className={`flex items-start space-x-2 max-w-[80%] ${message.sender === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
                         <Avatar className="w-8 h-8 flex-shrink-0">
                           <AvatarFallback className={message.sender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}>
-                            {message.sender === 'user' ? 'Y' : item.owner.split(' ').map((n: string) => n[0]).join('')}
+                            {message.sender === 'user' ? 'Y' : item.profiles?.full_name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
                           </AvatarFallback>
                         </Avatar>
                         <div
@@ -446,13 +484,13 @@ export default function NegotiatePage() {
                       <div className="flex items-start space-x-2 max-w-[80%]">
                         <Avatar className="w-8 h-8">
                           <AvatarFallback className="bg-green-100 text-green-600">
-                            {item.owner.split(' ').map((n: string) => n[0]).join('')}
+                            {item.profiles?.full_name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
                           <div className="flex items-center">
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
-                            <span className="text-sm text-gray-600">{item.owner.split(' ')[0]} is typing...</span>
+                            <span className="text-sm text-gray-600">{item.profiles?.full_name?.split(' ')[0] || 'Owner'} is typing...</span>
                           </div>
                         </div>
                       </div>
@@ -475,7 +513,7 @@ export default function NegotiatePage() {
                     />
                     <Button 
                       onClick={sendMessage}
-                      disabled={!newMessage.trim() || loading}
+                      disabled={!newMessage.trim() || loading || !user}
                       className="bg-green-600 hover:bg-green-700 px-4"
                     >
                       <Send className="w-4 h-4" />
@@ -552,6 +590,12 @@ export default function NegotiatePage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+      />
+    </>
   );
 }

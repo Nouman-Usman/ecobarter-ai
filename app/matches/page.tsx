@@ -8,84 +8,43 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Search, Filter, ArrowLeft, MessageCircle, DollarSign, Zap } from 'lucide-react';
-import { matchItems } from '@/lib/aiLogic';
-
-const allItems = [
-  {
-    id: 1,
-    title: "Vintage Acoustic Guitar",
-    description: "Beautiful vintage guitar in excellent condition",
-    value: 450,
-    category: "Musical Instruments",
-    condition: "excellent",
-    compatibility: 95,
-    image: "https://images.pexels.com/photos/1049690/pexels-photo-1049690.jpeg?auto=compress&cs=tinysrgb&w=400"
-  },
-  {
-    id: 2,
-    title: "High-End DSLR Camera",
-    description: "Professional camera with multiple lenses",
-    value: 800,
-    category: "Electronics",
-    condition: "good",
-    compatibility: 88,
-    image: "https://images.pexels.com/photos/90946/pexels-photo-90946.jpeg?auto=compress&cs=tinysrgb&w=400"
-  },
-  {
-    id: 3,
-    title: "Artisan Coffee Maker",
-    description: "Premium espresso machine for coffee lovers",
-    value: 320,
-    category: "Kitchen",
-    condition: "excellent",
-    compatibility: 92,
-    image: "https://images.pexels.com/photos/4226796/pexels-photo-4226796.jpeg?auto=compress&cs=tinysrgb&w=400"
-  },
-  {
-    id: 4,
-    title: "Mountain Bike",
-    description: "Professional trail bike with premium components",
-    value: 600,
-    category: "Sports",
-    condition: "good",
-    compatibility: 85,
-    image: "https://images.pexels.com/photos/100582/pexels-photo-100582.jpeg?auto=compress&cs=tinysrgb&w=400"
-  },
-  {
-    id: 5,
-    title: "Designer Office Chair",
-    description: "Ergonomic chair with premium materials",
-    value: 400,
-    category: "Home & Garden",
-    condition: "excellent",
-    compatibility: 90,
-    image: "https://images.pexels.com/photos/586024/pexels-photo-586024.jpeg?auto=compress&cs=tinysrgb&w=400"
-  },
-  {
-    id: 6,
-    title: "Professional Art Set",
-    description: "Complete set with paints, brushes, and canvas",
-    value: 280,
-    category: "Art & Crafts",
-    condition: "good",
-    compatibility: 87,
-    image: "https://images.pexels.com/photos/1109541/pexels-photo-1109541.jpeg?auto=compress&cs=tinysrgb&w=400"
-  }
-];
+import { getItems, Item } from '@/lib/supabase';
 
 const categories = ['All', 'Electronics', 'Musical Instruments', 'Kitchen', 'Sports', 'Home & Garden', 'Art & Crafts'];
 
 export default function MatchesPage() {
-  const [items, setItems] = useState(allItems);
-  const [filteredItems, setFilteredItems] = useState(allItems);
+  const [items, setItems] = useState<Item[]>([]);
+  const [filteredItems, setFilteredItems] = useState<Item[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [valueRange, setValueRange] = useState('All');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  useEffect(() => {
+    loadItems();
+  }, []);
 
   useEffect(() => {
     filterItems();
   }, [searchTerm, selectedCategory, valueRange]);
+
+  const loadItems = async () => {
+    setInitialLoading(true);
+    const { data, error } = await getItems(50, 0);
+    
+    if (data && !error) {
+      // Add compatibility scores for display
+      const itemsWithCompatibility = data.map(item => ({
+        ...item,
+        compatibility: Math.floor(Math.random() * 30) + 70, // Random score between 70-100
+        image: item.images[0] || 'https://images.pexels.com/photos/1109541/pexels-photo-1109541.jpeg?auto=compress&cs=tinysrgb&w=400'
+      }));
+      setItems(itemsWithCompatibility);
+    }
+    
+    setInitialLoading(false);
+  };
 
   const filterItems = () => {
     let filtered = items;
@@ -118,13 +77,17 @@ export default function MatchesPage() {
     setFilteredItems(filtered);
   };
 
-  const refreshMatches = async () => {
+  const refreshMatches = () => {
     setLoading(true);
-    // Simulate AI matching
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const newMatches = matchItems({ value: 500, category: 'Electronics' });
-    setItems(newMatches);
-    setLoading(false);
+    // Refresh compatibility scores
+    setTimeout(() => {
+      const updatedItems = items.map(item => ({
+        ...item,
+        compatibility: Math.floor(Math.random() * 30) + 70
+      }));
+      setItems(updatedItems);
+      setLoading(false);
+    }, 1500);
   };
 
   const getCompatibilityColor = (score: number) => {
@@ -132,6 +95,14 @@ export default function MatchesPage() {
     if (score >= 80) return 'bg-yellow-500';
     return 'bg-gray-500';
   };
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -226,14 +197,14 @@ export default function MatchesPage() {
             <Card key={item.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="relative h-48 overflow-hidden">
                 <img 
-                  src={item.image} 
+                  src={item.image || item.images[0]} 
                   alt={item.title}
                   className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute top-4 left-4">
-                  <div className={`px-2 py-1 rounded-full text-white text-xs font-semibold flex items-center ${getCompatibilityColor(item.compatibility)}`}>
+                  <div className={`px-2 py-1 rounded-full text-white text-xs font-semibold flex items-center ${getCompatibilityColor(item.compatibility || 85)}`}>
                     <Zap className="w-3 h-3 mr-1" />
-                    {item.compatibility}% Match
+                    {item.compatibility || 85}% Match
                   </div>
                 </div>
                 <div className="absolute top-4 right-4 bg-white text-gray-900 px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
@@ -252,6 +223,9 @@ export default function MatchesPage() {
                   <Badge variant="outline" className="text-xs">
                     {item.condition}
                   </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {item.profiles?.location || 'Location not set'}
+                  </Badge>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
@@ -266,7 +240,7 @@ export default function MatchesPage() {
                       Negotiate
                     </Button>
                   </Link>
-                  <Button variant="outline" size="sm" className="w-full text-xs">
+                  <Button variant="outline" size="sm" className="w-full text-xs" disabled>
                     <DollarSign className="w-3 h-3 mr-1" />
                     Buy
                   </Button>
